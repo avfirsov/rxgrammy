@@ -158,4 +158,75 @@ describe("createChain", () => {
 
     messages$.subscribe();
   });
+
+  // New tests for filtering by user ID and chat ID
+  it("should filter messages by user ID", (done) => {
+    const messages$ = from([
+      { ctx: createMockMessageCtx({ message: { from: { id: 1 } } }) },
+      { ctx: createMockMessageCtx({ message: { from: { id: 2 } } }) },
+    ]);
+
+    const chain = makeGrammyReactive(mockBot, params).from({ userIds: [1] });
+
+    chain.$.subscribe({
+      next: (msg) => {
+        expect(msg.ctx.message.from.id).toBe(1);
+        done();
+      },
+    });
+
+    messages$.subscribe();
+  });
+
+  it("should filter messages by chat ID", (done) => {
+    const messages$ = from([
+      { ctx: createMockMessageCtx({ message: { chat: { id: 1 } } }) },
+      { ctx: createMockMessageCtx({ message: { chat: { id: 2 } } }) },
+    ]);
+
+    const chain = makeGrammyReactive(mockBot, params).from({ chatIds: [1] });
+
+    chain.$.subscribe({
+      next: (msg) => {
+        expect(msg.ctx.message.chat.id).toBe(1);
+        done();
+      },
+    });
+
+    messages$.subscribe();
+  });
+
+  // New tests for chaining filters
+  it("should chain filters correctly", (done) => {
+    const messages$ = from([
+      { ctx: createMockMessageCtx({ message: { from: { id: 1 }, chat: { id: 1 }, text: "Hello" } }) },
+      { ctx: createMockMessageCtx({ message: { from: { id: 2 }, chat: { id: 1 }, text: "World" } }) },
+      { ctx: createMockMessageCtx({ message: { from: { id: 1 }, chat: { id: 2 }, text: "Hello" } }) },
+      { ctx: createMockMessageCtx({ message: { from: { id: 2 }, chat: { id: 2 }, text: "World" } }) },
+    ]);
+
+    const chain = makeGrammyReactive(mockBot, params)
+      .from({ userIds: [1] })
+      .from({ chatIds: [1] })
+      .withTextOnly;
+
+    const expectedMessages = [
+      { ctx: createMockMessageCtx({ message: { from: { id: 1 }, chat: { id: 1 }, text: "Hello" } }) },
+    ];
+
+    let count = 0;
+    chain.$.subscribe({
+      next: (msg) => {
+        expect(msg.ctx.message.from.id).toBe(expectedMessages[count].ctx.message.from.id);
+        expect(msg.ctx.message.chat.id).toBe(expectedMessages[count].ctx.message.chat.id);
+        expect(msg.ctx.message.text).toBe(expectedMessages[count].ctx.message.text);
+        count++;
+        if (count === expectedMessages.length) {
+          done();
+        }
+      },
+    });
+
+    messages$.subscribe();
+  });
 });
