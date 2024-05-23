@@ -4,6 +4,7 @@ import { Bot } from "grammy";
 import { makeGrammyReactive, Params } from "../createChain";
 import { BaseMessageCtx } from "../types";
 import { PartialDeep } from "type-fest";
+import { PhotoSize } from "grammy/out/types";
 
 // Mock the FIVE_MINUTES constant to 10 seconds
 jest.mock("../utils/common", () => ({
@@ -97,7 +98,7 @@ describe("createChain", () => {
     const messages$ = from([
       {
         ctx: createMockMessageCtx({
-          message: { photo: [{ file_id: "file1" }] },
+          message: { photo: [{ file_id: "file1" } as PhotoSize] },
         }),
       },
       { ctx: createMockMessageCtx({}) },
@@ -120,7 +121,7 @@ describe("createChain", () => {
       { ctx: createMockMessageCtx({ message: { text: "Hello" } }) },
       {
         ctx: createMockMessageCtx({
-          message: { photo: [{ file_id: "file1" }] },
+          message: { photo: [{ file_id: "file1" } as PhotoSize] },
         }),
       },
     ]);
