@@ -78,14 +78,13 @@ reactiveBot.withDocuments
   });
 
 // Фильтрация сообщений с фотографиями, не являющихся ответами, и загрузка файлов
-reactiveBot.withPhotos.thatAreNotReplies.fetch.$.subscribe(
-  ({ ctx, fetched }) => {
-    console.log(
-      "Фотографии, не являющиеся ответами, загруженные файлы:",
-      fetched,
-    );
-  },
-);
+reactiveBot
+    .withPhotos
+    .thatAreNotReplies
+    .fetch
+    .$.subscribe(({ ctx, fetched }) => {
+        console.log("Фотографии, не являющиеся ответами, загруженные файлы:", fetched);
+    });
 
 bot.start();
 ```
