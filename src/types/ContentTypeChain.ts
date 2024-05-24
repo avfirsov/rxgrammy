@@ -6,6 +6,7 @@ import { FetchChain } from "./FetchChain";
 
 export type PhotoMessagesAggregated = {
   photosCtxs: PhotoMessageCtx[];
+  caption: string;
   photos: PhotoSize[];
 };
 export type DocumentMessagesAggregated = {

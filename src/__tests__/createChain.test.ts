@@ -1,33 +1,84 @@
-import { from } from "rxjs";
-import { delay } from "rxjs/operators";
-import { Bot } from "grammy";
+import { Api, Bot, Context, RawApi } from "grammy";
 import { makeGrammyReactive, Params } from "../createChain";
 import { BaseMessageCtx } from "../types";
 import { PartialDeep } from "type-fest";
-import { PhotoSize } from "grammy/out/types";
+import { PhotoSize, Update } from "grammy/out/types";
+import { FetchedFile } from "../types/FetchChain";
 
-// Mock the FIVE_MINUTES constant to 10 seconds
-jest.mock("../utils/common", () => ({
-  ...jest.requireActual("../utils/common"),
-  FIVE_MINUTES: 10000,
+// Mock the fetchFileFromCtx function
+jest.mock("../utils/tg", () => ({
+  ...jest.requireActual("../utils/tg"),
+  fetchFileFromCtx: jest
+    .fn()
+    .mockResolvedValue({ data: "file-data", fileInfo: { file_id: "file-id" } }),
 }));
 
-const mockBot = new Bot("dummy-token");
+const _mockBot = {
+  $handlers: [] as ((ctx: Context, nextFn: () => any) => Promise<void>)[],
+  on(
+    type: string,
+    handler: (ctx: Context, nextFn: () => any) => Promise<void>,
+  ) {
+    _mockBot.$handlers.push(handler);
+  },
+  async next(ctx: BaseMessageCtx) {
+    for (const handler of _mockBot.$handlers) {
+      await handler(ctx, () => 42);
+    }
+  },
+} as const;
+
+const mockBot = _mockBot as unknown as Bot<Context, Api<RawApi>> & {
+  next(ctx: Context): Promise<void>;
+};
 
 const createMockMessageCtx = (
   overrides: PartialDeep<BaseMessageCtx>,
-): BaseMessageCtx =>
-  ({
+  options?: {
+    mediaType?: 'document' | 'photo';
+    chatId?: number;
+    userId?: number;
+    text?: string;
+    mediaGroupId?: string;
+    fileIds?: string[];
+  },
+): BaseMessageCtx => {
+  const {
+    mediaType,
+    chatId = 1,
+    userId = 1,
+    text = "",
+    mediaGroupId,
+    fileIds = [],
+  } = options || {};
+
+  let media = {};
+  if (mediaType) {
+    if (!mediaGroupId || fileIds.length === 0) {
+      throw new Error("media_group_id and fileIds are required when mediaType is specified");
+    }
+    if (mediaType === 'document') {
+      media = { document: { file_id: fileIds[0] } };
+    } else if (mediaType === 'photo') {
+      media = { photo: fileIds.map(file_id => ({ file_id })) };
+    }
+  }
+
+  return {
     message: {
       message_id: 1,
-      from: { id: 1, is_bot: false, first_name: "Test" },
-      chat: { id: 1, type: "private" },
+      from: { id: userId, is_bot: false, first_name: "Test" },
+      chat: { id: chatId, type: "private" },
       date: Math.floor(Date.now() / 1000),
-      ...overrides,
+      text,
+      media_group_id: mediaGroupId,
+      ...media,
+      ...overrides.message,
     },
     update_id: 1,
     ...overrides,
-  }) as BaseMessageCtx;
+  } as BaseMessageCtx;
+};
 
 describe("createChain", () => {
   let params: Required<Params> & { apiToken: string };
@@ -37,117 +88,90 @@ describe("createChain", () => {
   });
 
   it("should filter messages that are replies", (done) => {
-    const messages$ = from([
-      { ctx: createMockMessageCtx({ message: { reply_to_message: {} } }) },
-      { ctx: createMockMessageCtx({}) },
-    ]);
+    const messages$ = makeGrammyReactive(mockBot, params).thatAreReplies.$;
 
-    const chain = makeGrammyReactive(mockBot, params).thatAreReplies;
-
-    chain.$.subscribe({
+    messages$.subscribe({
       next: (msg) => {
         expect(msg.ctx.message.reply_to_message).toBeDefined();
         done();
       },
     });
 
-    messages$.subscribe();
+    mockBot.next(createMockMessageCtx({ message: { reply_to_message: {} } }));
+    mockBot.next(createMockMessageCtx({}));
   });
 
   it("should filter messages that are not replies", (done) => {
-    const messages$ = from([
-      { ctx: createMockMessageCtx({}) },
-      { ctx: createMockMessageCtx({ message: { reply_to_message: {} } }) },
-    ]);
+    const messages$ = makeGrammyReactive(mockBot, params).thatAreNotReplies.$;
 
-    const chain = makeGrammyReactive(mockBot, params).thatAreNotReplies;
-
-    chain.$.subscribe({
+    messages$.subscribe({
       next: (msg) => {
         expect(msg.ctx.message.reply_to_message).toBeUndefined();
         done();
       },
     });
 
-    messages$.subscribe();
+    mockBot.next(createMockMessageCtx({}));
+    mockBot.next(createMockMessageCtx({ message: { reply_to_message: {} } }));
   });
 
   it("should filter messages with documents", (done) => {
-    const messages$ = from([
-      {
-        ctx: createMockMessageCtx({
-          message: { document: { file_id: "file1" } },
-        }),
-      },
-      { ctx: createMockMessageCtx({}) },
-    ]);
+    const messages$ = makeGrammyReactive(mockBot, params).withDocuments.$;
 
-    const chain = makeGrammyReactive(mockBot, params).withDocuments;
-
-    chain.$.subscribe({
+    messages$.subscribe({
       next: (msg) => {
         expect(msg.documents).toHaveLength(1);
         done();
       },
     });
 
-    messages$.subscribe();
+    mockBot.next(
+      createMockMessageCtx({ message: { document: { file_id: "file1" } } }),
+    );
+    mockBot.next(createMockMessageCtx({}));
   });
 
   it("should filter messages with photos", (done) => {
-    const messages$ = from([
-      {
-        ctx: createMockMessageCtx({
-          message: { photo: [{ file_id: "file1" } as PhotoSize] },
-        }),
-      },
-      { ctx: createMockMessageCtx({}) },
-    ]);
+    const messages$ = makeGrammyReactive(mockBot, params).withPhotos.$;
 
-    const chain = makeGrammyReactive(mockBot, params).withPhotos;
-
-    chain.$.subscribe({
+    messages$.subscribe({
       next: (msg) => {
         expect(msg.photos).toHaveLength(1);
         done();
       },
     });
 
-    messages$.subscribe();
+    mockBot.next(
+      createMockMessageCtx({
+        message: { photo: [{ file_id: "file1" } as PhotoSize] },
+      }),
+    );
+    mockBot.next(createMockMessageCtx({}));
   });
 
   it("should filter messages with text only", (done) => {
-    const messages$ = from([
-      { ctx: createMockMessageCtx({ message: { text: "Hello" } }) },
-      {
-        ctx: createMockMessageCtx({
-          message: { photo: [{ file_id: "file1" } as PhotoSize] },
-        }),
-      },
-    ]);
+    const messages$ = makeGrammyReactive(mockBot, params).withTextOnly.$;
 
-    const chain = makeGrammyReactive(mockBot, params).withTextOnly;
-
-    chain.$.subscribe({
+    messages$.subscribe({
       next: (msg) => {
         expect(msg.ctx.message.text).toBe("Hello");
         done();
       },
     });
 
-    messages$.subscribe();
+    mockBot.next(createMockMessageCtx({ message: { text: "Hello" } }));
+    mockBot.next(
+      createMockMessageCtx({
+        message: { photo: [{ file_id: "file1" } as PhotoSize] },
+      }),
+    );
   });
 
   it("should handle delays between messages", (done) => {
-    const messages$ = from([
-      { ctx: createMockMessageCtx({ message: { text: "Hello" } }) },
-      { ctx: createMockMessageCtx({ message: { text: "World" } }) },
-    ]).pipe(delay(500));
-
-    const chain = makeGrammyReactive(mockBot, params).withTextOnly;
+    const messages$ = makeGrammyReactive(mockBot, params).withTextOnly.$;
 
     let count = 0;
-    chain.$.subscribe({
+    messages$.subscribe({
       next: (msg) => {
         count++;
         if (count === 2) {
@@ -156,70 +180,71 @@ describe("createChain", () => {
       },
     });
 
-    messages$.subscribe();
+    mockBot.next(createMockMessageCtx({ message: { text: "Hello" } }));
+    setTimeout(() => {
+      mockBot.next(createMockMessageCtx({ message: { text: "World" } }));
+    }, 500);
   });
 
   // New tests for filtering by user ID and chat ID
   it("should filter messages by user ID", (done) => {
-    const messages$ = from([
-      { ctx: createMockMessageCtx({ message: { from: { id: 1 } } }) },
-      { ctx: createMockMessageCtx({ message: { from: { id: 2 } } }) },
-    ]);
+    const messages$ = makeGrammyReactive(mockBot, params).from({
+      userIds: [1],
+    }).$;
 
-    const chain = makeGrammyReactive(mockBot, params).from({ userIds: [1] });
-
-    chain.$.subscribe({
+    messages$.subscribe({
       next: (msg) => {
         expect(msg.ctx.message.from.id).toBe(1);
         done();
       },
     });
 
-    messages$.subscribe();
+    mockBot.next(createMockMessageCtx({ message: { from: { id: 1 } } }));
+    mockBot.next(createMockMessageCtx({ message: { from: { id: 2 } } }));
   });
 
   it("should filter messages by chat ID", (done) => {
-    const messages$ = from([
-      { ctx: createMockMessageCtx({ message: { chat: { id: 1 } } }) },
-      { ctx: createMockMessageCtx({ message: { chat: { id: 2 } } }) },
-    ]);
+    const messages$ = makeGrammyReactive(mockBot, params).from({
+      chatIds: [1],
+    }).$;
 
-    const chain = makeGrammyReactive(mockBot, params).from({ chatIds: [1] });
-
-    chain.$.subscribe({
+    messages$.subscribe({
       next: (msg) => {
         expect(msg.ctx.message.chat.id).toBe(1);
         done();
       },
     });
 
-    messages$.subscribe();
+    mockBot.next(createMockMessageCtx({ message: { chat: { id: 1 } } }));
+    mockBot.next(createMockMessageCtx({ message: { chat: { id: 2 } } }));
   });
 
   // New tests for chaining filters
   it("should chain filters correctly", (done) => {
-    const messages$ = from([
-      { ctx: createMockMessageCtx({ message: { from: { id: 1 }, chat: { id: 1 }, text: "Hello" } }) },
-      { ctx: createMockMessageCtx({ message: { from: { id: 2 }, chat: { id: 1 }, text: "World" } }) },
-      { ctx: createMockMessageCtx({ message: { from: { id: 1 }, chat: { id: 2 }, text: "Hello" } }) },
-      { ctx: createMockMessageCtx({ message: { from: { id: 2 }, chat: { id: 2 }, text: "World" } }) },
-    ]);
-
-    const chain = makeGrammyReactive(mockBot, params)
+    const messages$ = makeGrammyReactive(mockBot, params)
       .from({ userIds: [1] })
-      .from({ chatIds: [1] })
-      .withTextOnly;
+      .from({ chatIds: [1] }).withTextOnly.$;
 
     const expectedMessages = [
-      { ctx: createMockMessageCtx({ message: { from: { id: 1 }, chat: { id: 1 }, text: "Hello" } }) },
+      {
+        ctx: createMockMessageCtx({
+          message: { from: { id: 1 }, chat: { id: 1 }, text: "Hello" },
+        }),
+      },
     ];
 
     let count = 0;
-    chain.$.subscribe({
+    messages$.subscribe({
       next: (msg) => {
-        expect(msg.ctx.message.from.id).toBe(expectedMessages[count].ctx.message.from.id);
-        expect(msg.ctx.message.chat.id).toBe(expectedMessages[count].ctx.message.chat.id);
-        expect(msg.ctx.message.text).toBe(expectedMessages[count].ctx.message.text);
+        expect(msg.ctx.message.from.id).toBe(
+          expectedMessages[count].ctx.message.from.id,
+        );
+        expect(msg.ctx.message.chat.id).toBe(
+          expectedMessages[count].ctx.message.chat.id,
+        );
+        expect(msg.ctx.message.text).toBe(
+          expectedMessages[count].ctx.message.text,
+        );
         count++;
         if (count === expectedMessages.length) {
           done();
@@ -227,6 +252,110 @@ describe("createChain", () => {
       },
     });
 
-    messages$.subscribe();
+    mockBot.next(
+      createMockMessageCtx({
+        message: { from: { id: 1 }, chat: { id: 1 }, text: "Hello" },
+      }),
+    );
+    mockBot.next(
+      createMockMessageCtx({
+        message: { from: { id: 2 }, chat: { id: 1 }, text: "World" },
+      }),
+    );
+    mockBot.next(
+      createMockMessageCtx({
+        message: { from: { id: 1 }, chat: { id: 2 }, text: "Hello" },
+      }),
+    );
+    mockBot.next(
+      createMockMessageCtx({
+        message: { from: { id: 2 }, chat: { id: 2 }, text: "World" },
+      }),
+    );
+  });
+
+  // New tests for fetch chain
+  it("should fetch files correctly", (done) => {
+    const messages$ = makeGrammyReactive(mockBot, params).withDocuments.fetch.$;
+
+    messages$.subscribe({
+      next: (msg) => {
+        expect(msg.fetched).toHaveLength(1);
+        expect((msg.fetched[0] as FetchedFile).data).toBe("file-data");
+        done();
+      },
+    });
+
+    mockBot.next(
+      createMockMessageCtx({ message: { document: { file_id: "file1" } } }),
+    );
+  });
+
+  // Test for receiving a text message followed by documents
+  it("should handle text message followed by documents", (done) => {
+    const messages$ = makeGrammyReactive(mockBot, params).withDocuments.$;
+
+    messages$.subscribe({
+      next: (msg) => {
+        expect(msg.textCtx?.message.text).toBe("Annotation");
+        expect(msg.documents).toHaveLength(3);
+        done();
+      },
+    });
+
+    mockBot.next(createMockMessageCtx({ message: { text: "Annotation" } }));
+    setTimeout(() => {
+      mockBot.next(
+        createMockMessageCtx({ message: { document: { file_id: "file1" } } }),
+      );
+      mockBot.next(
+        createMockMessageCtx({ message: { document: { file_id: "file2" } } }),
+      );
+      mockBot.next(
+        createMockMessageCtx({ message: { document: { file_id: "file3" } } }),
+      );
+    }, 2000);
+  });
+
+  // Test for receiving a single document with a caption
+  it("should handle single document with caption", (done) => {
+    const messages$ = makeGrammyReactive(mockBot, params).withDocuments.$;
+
+    messages$.subscribe({
+      next: (msg) => {
+        expect(msg.documents).toHaveLength(1);
+        expect(msg.text).toBe("Caption");
+        done();
+      },
+    });
+
+    mockBot.next(
+      createMockMessageCtx({
+        message: { document: { file_id: "file1" }, caption: "Caption" },
+      }),
+    );
+  });
+
+  // Test for receiving multiple photos
+  it("should handle multiple photos", (done) => {
+    const messages$ = makeGrammyReactive(mockBot, params).withPhotos.$;
+
+    messages$.subscribe({
+      next: (msg) => {
+        expect(msg.photos).toHaveLength(2);
+        done();
+      },
+    });
+
+    mockBot.next(
+      createMockMessageCtx({
+        message: { photo: [{ file_id: "file1" } as PhotoSize] },
+      }),
+    );
+    mockBot.next(
+      createMockMessageCtx({
+        message: { photo: [{ file_id: "file2" } as PhotoSize] },
+      }),
+    );
   });
 });

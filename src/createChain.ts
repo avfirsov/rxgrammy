@@ -25,7 +25,7 @@ import {
   WrappedStream,
 } from "./types";
 import { dropChain, FIVE_MINUTES, isNotUndefined, not } from "./utils/common";
-import { Bot } from "grammy";
+import { Api, Bot, Context, RawApi } from "grammy";
 import {
   ctxHasDocument,
   ctxHasPhoto,
@@ -139,6 +139,7 @@ export const createChain = <
     const sameMediaGroupMessages$$ = sameUserSameChatMessagesWithMedia$$.pipe(
       mergeMap((sameUserSameChatMessagesWithSameMediaGroup$) =>
         sameUserSameChatMessagesWithSameMediaGroup$.pipe(
+          //TODO: проверить, что у одиночных документов тоже создается медиа-группа
           groupBy<T, string>(getMediaGroupIdFromWrapppedCtx, {
             duration: (sameUserSameChatMessagesSameMediaGroup$) =>
               //ожидаем поступления сообщений в группу в течение 5 минут
@@ -259,6 +260,10 @@ export const createChain = <
                     ({ ctx }) => ctx.message.photo?.[ctx.message.photo?.length],
                   )
                   .filter(isNotUndefined),
+                caption:
+                  payloads[0].ctx.message.caption ??
+                  payloads[0].ctx.message.text ??
+                  "",
               })),
             );
 
@@ -350,7 +355,7 @@ export type Params = {
 };
 
 export const makeGrammyReactive = (
-  bot: Bot,
+  bot: Bot<Context, Api<RawApi>>,
   params?: Params,
 ): WrappedStream<"Replies" | "ContentType"> => {
   const messages$ = fromEventPattern<{ ctx: BaseMessageCtx }>((handler) =>
