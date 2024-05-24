@@ -4,6 +4,7 @@ import { BaseMessageCtx } from "../types";
 import { PartialDeep } from "type-fest";
 import { PhotoSize, Update } from "grammy/out/types";
 import { FetchedFile } from "../types/FetchChain";
+import objectContaining = jasmine.objectContaining;
 
 // Mock the fetchFileFromCtx function
 jest.mock("../utils/tg", () => ({
@@ -13,29 +14,37 @@ jest.mock("../utils/tg", () => ({
     .mockResolvedValue({ data: "file-data", fileInfo: { file_id: "file-id" } }),
 }));
 
-const _mockBot = {
-  $handlers: [] as ((ctx: Context, nextFn: () => any) => Promise<void>)[],
-  on(
-    type: string,
-    handler: (ctx: Context, nextFn: () => any) => Promise<void>,
-  ) {
-    _mockBot.$handlers.push(handler);
-  },
-  async next(ctx: BaseMessageCtx) {
-    for (const handler of _mockBot.$handlers) {
-      await handler(ctx, () => 42);
-    }
-  },
-} as const;
-
-const mockBot = _mockBot as unknown as Bot<Context, Api<RawApi>> & {
+const createMockBot = (): Bot<Context, Api<RawApi>> & {
   next(ctx: Context): Promise<void>;
+} => {
+  const _mockBot = {
+    $handlers: [] as ((ctx: Context, nextFn: () => any) => Promise<void>)[],
+    on(
+      type: string,
+      handler: (ctx: Context, nextFn: () => any) => Promise<void>,
+    ) {
+      _mockBot.$handlers.push(handler);
+    },
+    async next(ctx: BaseMessageCtx) {
+      for (const handler of _mockBot.$handlers) {
+        await handler(ctx, () => 42);
+      }
+    },
+  } as const;
+
+  return _mockBot as unknown as Bot<Context, Api<RawApi>> & {
+    next(ctx: Context): Promise<void>;
+  };
 };
+
+let mockBot: Bot<Context, Api<RawApi>> & {
+  next(ctx: Context): Promise<void>;
+} = createMockBot();
 
 const createMockMessageCtx = (
   overrides: PartialDeep<BaseMessageCtx>,
   options?: {
-    mediaType?: 'document' | 'photo';
+    mediaType?: "document" | "photo";
     chatId?: number;
     userId?: number;
     text?: string;
@@ -54,17 +63,19 @@ const createMockMessageCtx = (
 
   let media = {};
   if (mediaType) {
-    if (!mediaGroupId || fileIds.length === 0) {
-      throw new Error("media_group_id and fileIds are required when mediaType is specified");
+    if (!mediaGroupId) {
+      throw new Error("media_group_id is required when mediaType is specified");
     }
-    if (mediaType === 'document') {
+    if (mediaType === "document" && fileIds.length) {
       media = { document: { file_id: fileIds[0] } };
-    } else if (mediaType === 'photo') {
-      media = { photo: fileIds.map(file_id => ({ file_id })) };
+    } else if (mediaType === "photo") {
+      media = { photo: fileIds.map((file_id) => ({ file_id })) };
     }
   }
 
   return {
+    ...overrides,
+    chat: { id: chatId, type: "private", ...(overrides.message?.chat || {}) },
     message: {
       message_id: 1,
       from: { id: userId, is_bot: false, first_name: "Test" },
@@ -76,7 +87,6 @@ const createMockMessageCtx = (
       ...overrides.message,
     },
     update_id: 1,
-    ...overrides,
   } as BaseMessageCtx;
 };
 
@@ -85,6 +95,7 @@ describe("createChain", () => {
 
   beforeEach(() => {
     params = { uxDebounce: 200, apiToken: "dummy-token" };
+    mockBot = createMockBot();
   });
 
   it("should filter messages that are replies", (done) => {
@@ -126,7 +137,10 @@ describe("createChain", () => {
     });
 
     mockBot.next(
-      createMockMessageCtx({ message: { document: { file_id: "file1" } } }),
+      createMockMessageCtx(
+        {},
+        { mediaType: "document", mediaGroupId: "group1", fileIds: ["file1"] },
+      ),
     );
     mockBot.next(createMockMessageCtx({}));
   });
@@ -142,9 +156,10 @@ describe("createChain", () => {
     });
 
     mockBot.next(
-      createMockMessageCtx({
-        message: { photo: [{ file_id: "file1" } as PhotoSize] },
-      }),
+      createMockMessageCtx(
+        {},
+        { mediaType: "photo", mediaGroupId: "group1", fileIds: ["file1"] },
+      ),
     );
     mockBot.next(createMockMessageCtx({}));
   });
@@ -161,9 +176,10 @@ describe("createChain", () => {
 
     mockBot.next(createMockMessageCtx({ message: { text: "Hello" } }));
     mockBot.next(
-      createMockMessageCtx({
-        message: { photo: [{ file_id: "file1" } as PhotoSize] },
-      }),
+      createMockMessageCtx(
+        {},
+        { mediaType: "photo", mediaGroupId: "group1", fileIds: ["file1"] },
+      ),
     );
   });
 
@@ -287,7 +303,10 @@ describe("createChain", () => {
     });
 
     mockBot.next(
-      createMockMessageCtx({ message: { document: { file_id: "file1" } } }),
+      createMockMessageCtx(
+        {},
+        { mediaType: "document", mediaGroupId: "group1", fileIds: ["file1"] },
+      ),
     );
   });
 
@@ -297,22 +316,36 @@ describe("createChain", () => {
 
     messages$.subscribe({
       next: (msg) => {
-        expect(msg.textCtx?.message.text).toBe("Annotation");
         expect(msg.documents).toHaveLength(3);
+        expect(msg.textCtx?.message.text).toBe("Annotation");
         done();
       },
     });
 
-    mockBot.next(createMockMessageCtx({ message: { text: "Annotation" } }));
+    mockBot.next(
+      createMockMessageCtx(
+        { message: { text: "Annotation" } },
+        { mediaType: "document", mediaGroupId: "group1" },
+      ),
+    );
     setTimeout(() => {
       mockBot.next(
-        createMockMessageCtx({ message: { document: { file_id: "file1" } } }),
+        createMockMessageCtx(
+          {},
+          { mediaType: "document", mediaGroupId: "group1", fileIds: ["file1"] },
+        ),
       );
       mockBot.next(
-        createMockMessageCtx({ message: { document: { file_id: "file2" } } }),
+        createMockMessageCtx(
+          {},
+          { mediaType: "document", mediaGroupId: "group1", fileIds: ["file2"] },
+        ),
       );
       mockBot.next(
-        createMockMessageCtx({ message: { document: { file_id: "file3" } } }),
+        createMockMessageCtx(
+          {},
+          { mediaType: "document", mediaGroupId: "group1", fileIds: ["file3"] },
+        ),
       );
     }, 2000);
   });
@@ -330,9 +363,15 @@ describe("createChain", () => {
     });
 
     mockBot.next(
-      createMockMessageCtx({
-        message: { document: { file_id: "file1" }, caption: "Caption" },
-      }),
+      createMockMessageCtx(
+        {},
+        {
+          mediaType: "document",
+          mediaGroupId: "group1",
+          fileIds: ["file1"],
+          text: "Caption",
+        },
+      ),
     );
   });
 
@@ -348,14 +387,16 @@ describe("createChain", () => {
     });
 
     mockBot.next(
-      createMockMessageCtx({
-        message: { photo: [{ file_id: "file1" } as PhotoSize] },
-      }),
+      createMockMessageCtx(
+        {},
+        { mediaType: "photo", mediaGroupId: "group1", fileIds: ["file1"] },
+      ),
     );
     mockBot.next(
-      createMockMessageCtx({
-        message: { photo: [{ file_id: "file2" } as PhotoSize] },
-      }),
+      createMockMessageCtx(
+        {},
+        { mediaType: "photo", mediaGroupId: "group1", fileIds: ["file2"] },
+      ),
     );
   });
 });

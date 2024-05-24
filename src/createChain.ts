@@ -13,6 +13,7 @@ import {
   share,
   startWith,
   takeUntil,
+  tap,
 } from "rxjs";
 import {
   AllChains,
@@ -54,9 +55,10 @@ export const createChain = <
     ): WrappedStream<AllowedChainsTup[number], T> {
       const filtered = self.$.pipe(
         filter(({ ctx }) => {
-          const userId = ctx.message.from.id;
-
-          if ("userIds" in filterOpts && filterOpts.userIds.includes(userId)) {
+          if (
+            "userIds" in filterOpts &&
+            filterOpts.userIds.includes(ctx.message.from.id)
+          ) {
             return false;
           }
 
@@ -78,9 +80,10 @@ export const createChain = <
     ): WrappedStream<AllowedChainsTup[number], T> {
       const filtered = self.$.pipe(
         filter(({ ctx }) => {
-          const userId = ctx.message.from.id;
-
-          if ("userIds" in filterOpts && !filterOpts.userIds.includes(userId)) {
+          if (
+            "userIds" in filterOpts &&
+            !filterOpts.userIds.includes(ctx.message.from.id)
+          ) {
             return false;
           }
 
@@ -127,6 +130,7 @@ export const createChain = <
     const sameUserSameChatMessagesWithMedia$$: Observable<
       GroupedObservable<string, T>
     > = selfTyped.$.pipe(
+      tap((val) => console.log(`selfTyped.$ ctx ${JSON.stringify(val)}`)),
       //берем только сообщения с медиа
       filter(({ ctx }) => !!ctx.message.media_group_id),
       groupBy<T, string>(getUserChatKeyByWrappedCtx, {
@@ -139,6 +143,12 @@ export const createChain = <
     const sameMediaGroupMessages$$ = sameUserSameChatMessagesWithMedia$$.pipe(
       mergeMap((sameUserSameChatMessagesWithSameMediaGroup$) =>
         sameUserSameChatMessagesWithSameMediaGroup$.pipe(
+          tap((val) =>
+            console.log(
+              `sameUserSameChatMessagesWithSameMediaGroup$ created with ctx ${JSON.stringify(val)}`,
+            ),
+          ),
+
           //TODO: проверить, что у одиночных документов тоже создается медиа-группа
           groupBy<T, string>(getMediaGroupIdFromWrapppedCtx, {
             duration: (sameUserSameChatMessagesSameMediaGroup$) =>
@@ -148,6 +158,9 @@ export const createChain = <
                 take(1),
               ),
           }),
+          tap((val) =>
+            console.log(`sameMediaGroupMessages$$ created with key ${val.key}`),
+          ),
         ),
       ),
     );
@@ -162,6 +175,11 @@ export const createChain = <
             mergeMap((sameMediaGroupMessages$) =>
               sameMediaGroupMessages$.pipe(
                 first(),
+                tap((val) =>
+                  console.log(
+                    `staring mediagroup with ${JSON.stringify(val.ctx)}`,
+                  ),
+                ),
                 filter(
                   //сообщения в группах документов начинаются либо с сообщения с ctx.message.document, либо с текстовой подписи - простого сообщения
                   //TODO: проверить это утверждение
@@ -191,25 +209,29 @@ export const createChain = <
 
           const $: Observable<T & DocumentMessagesAggregated> =
             docMessagesBatches$.pipe(
-              map((payloads: T[]) => ({
-                ...(payloads[0] as T),
-                //если в первом сообщении нет документа - это текстовая аннотация
-                textCtx: !payloads[0].ctx.message.document
-                  ? payloads[0].ctx
-                  : null,
-                documentCtxs: payloads
-                  .filter(pluckCtx(ctxHasDocument))
-                  .map(({ ctx }) => ctx as DocumentMessageCtx),
-                documents: payloads
-                  .map(({ ctx }) => ctx.message.document)
-                  .filter(isNotUndefined),
-                //если отправляют один документ, то текст записывается в нем как caption. Иначе, если документов больше - отправляется
-                //предшествующим текстовым сообщением
-                text:
-                  payloads[0].ctx.message.text ??
-                  payloads[0].ctx.message.caption ??
-                  "",
-              })),
+              map(
+                (payloads: T[]) =>
+                  //@ts-expect-error
+                  console.log("payloads", payloads) || {
+                    ...(payloads[0] as T),
+                    //если в первом сообщении нет документа - это текстовая аннотация
+                    textCtx: !payloads[0].ctx.message.document
+                      ? payloads[0].ctx
+                      : null,
+                    documentCtxs: payloads
+                      .filter(pluckCtx(ctxHasDocument))
+                      .map(({ ctx }) => ctx as DocumentMessageCtx),
+                    documents: payloads
+                      .map(({ ctx }) => ctx.message.document)
+                      .filter(isNotUndefined),
+                    //если отправляют один документ, то текст записывается в нем как caption. Иначе, если документов больше - отправляется
+                    //предшествующим текстовым сообщением
+                    text:
+                      payloads[0].ctx.message.text ??
+                      payloads[0].ctx.message.caption ??
+                      "",
+                  },
+              ),
             );
 
           return createChain(
@@ -257,7 +279,8 @@ export const createChain = <
                 photos: payloads
                   .filter(pluckCtx(ctxHasPhoto))
                   .map(
-                    ({ ctx }) => ctx.message.photo?.[ctx.message.photo?.length],
+                    ({ ctx }) =>
+                      ctx.message.photo?.[ctx.message.photo?.length - 1],
                   )
                   .filter(isNotUndefined),
                 caption:
@@ -283,6 +306,7 @@ export const createChain = <
             //берем только сообщения с медиа
             filter<T>(pluckCtx(ctxHasTextOnly)),
           );
+          console.log("=>(createChain.ts:286) $", $);
 
           return createChain(
             $,
