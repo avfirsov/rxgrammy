@@ -30,16 +30,16 @@ const bot = new Bot("YOUR_BOT_TOKEN");
 const reactiveBot = makeGrammyReactive(bot);
 
 reactiveBot.from({ userIds: [123456789] }).$.subscribe(({ ctx }) => {
-  console.log("Сообщен ие от пользователя 123456789:", ctx.message);
+  console.log("Сообщение от пользователя 123456789:", ctx.message);
 });
 reactiveBot.withDocuments.$.subscribe(({ ctx, text }) => {
-  console.log("Докумен ты:", ctx.message.document, "Текст:", text);
+  console.log("Документы:", ctx.message.document, "Текст:", text);
 });
 reactiveBot.withPhotos.$.subscribe(({ ctx, caption }) => {
-  console.log("Фотогра фии:", ctx.message.photo, "Подпись:", caption);
+  console.log("Фотографии:", ctx.message.photo, "Подпись:", caption);
 });
 reactiveBot.withTextOnly.$.subscribe(({ ctx }) => {
-  console.log("Текстов ое сообщение:", ctx.message.text);
+  console.log("Текстовое сообщение:", ctx.message.text);
 });
 
 bot.start();
@@ -62,7 +62,7 @@ reactiveBot
   .from({ chatIds: [987654321] })
   .withTextOnly.$.subscribe(({ ctx }) => {
     console.log(
-      "Текстов ое сообщение от пользователя 123456789 в чате 987654321:",
+      "Текстовое сообщение от пользователя 123456789 в чате 987654321:",
       ctx.message.text,
     );
   });
@@ -72,7 +72,7 @@ reactiveBot.withDocuments
   .notFrom({ userIds: [123456789] })
   .thatAreReplies.$.subscribe(({ ctx }) => {
     console.log(
-      "Докумен т в ответе, не от пользователя 123456789:",
+      "Документ в ответе, не от пользователя 123456789:",
       ctx.message.document,
     );
   });
