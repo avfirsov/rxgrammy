@@ -63,9 +63,6 @@ const createMockMessageCtx = (
 
   let media = {};
   if (mediaType) {
-    if (!mediaGroupId) {
-      throw new Error("media_group_id is required when mediaType is specified");
-    }
     if (mediaType === "document" && fileIds.length) {
       media = { document: { file_id: fileIds[0] } };
     } else if (mediaType === "photo") {
@@ -354,11 +351,35 @@ describe("createChain", () => {
   it("should handle single document with caption", (done) => {
     const messages$ = makeGrammyReactive(mockBot, params).withDocuments.$;
 
+    const expectedMessages = [
+      {
+        ctx: createMockMessageCtx({
+          message: { from: { id: 1 }, chat: { id: 1 }, text: "Caption" },
+        }),
+      },
+      {
+        ctx: createMockMessageCtx({
+          message: { from: { id: 2 }, chat: { id: 2 }, text: "Caption2" },
+        }),
+      },
+    ];
+
+    let count = 0;
     messages$.subscribe({
       next: (msg) => {
-        expect(msg.documents).toHaveLength(1);
-        expect(msg.text).toBe("Caption");
-        done();
+        expect(msg.ctx.message.from.id).toBe(
+          expectedMessages[count].ctx.message.from.id,
+        );
+        expect(msg.ctx.message.chat.id).toBe(
+          expectedMessages[count].ctx.message.chat.id,
+        );
+        expect(msg.ctx.message.text).toBe(
+          expectedMessages[count].ctx.message.text,
+        );
+        count++;
+        if (count === expectedMessages.length) {
+          done();
+        }
       },
     });
 
@@ -367,9 +388,21 @@ describe("createChain", () => {
         {},
         {
           mediaType: "document",
-          mediaGroupId: "group1",
           fileIds: ["file1"],
           text: "Caption",
+        },
+      ),
+    );
+
+    mockBot.next(
+      createMockMessageCtx(
+        {},
+        {
+          userId: 2,
+          chatId: 2,
+          mediaType: "document",
+          fileIds: ["file1"],
+          text: "Caption2",
         },
       ),
     );
@@ -395,6 +428,449 @@ describe("createChain", () => {
     mockBot.next(
       createMockMessageCtx(
         {},
+        { mediaType: "photo", mediaGroupId: "group1", fileIds: ["file2"] },
+      ),
+    );
+  });
+
+  it("should handle single photos with caption", (done) => {
+    const messages$ = makeGrammyReactive(mockBot, params).withPhotos.$;
+
+    messages$.subscribe({
+      next: (msg) => {
+        expect(msg.photos).toHaveLength(1);
+        expect(msg.caption).toBe("Caption");
+        done();
+      },
+    });
+
+    mockBot.next(
+      createMockMessageCtx(
+        {},
+        {
+          mediaType: "photo",
+          fileIds: ["file1"],
+          text: "Caption",
+        },
+      ),
+    );
+  });
+
+  // 10 combinations of filters before withDocuments
+  it("should filter messages with documents from user ID 1", (done) => {
+    const messages$ = makeGrammyReactive(mockBot, params).from({ userIds: [1] })
+      .withDocuments.$;
+
+    messages$.subscribe({
+      next: (msg) => {
+        expect(msg.documents).toHaveLength(1);
+        done();
+      },
+    });
+
+    mockBot.next(
+      createMockMessageCtx(
+        { message: { from: { id: 1 } } },
+        { mediaType: "document", mediaGroupId: "group1", fileIds: ["file1"] },
+      ),
+    );
+    mockBot.next(
+      createMockMessageCtx(
+        { message: { from: { id: 2 } } },
+        { mediaType: "document", mediaGroupId: "group1", fileIds: ["file2"] },
+      ),
+    );
+  });
+
+  it("should filter messages with documents not from user ID 2", (done) => {
+    const messages$ = makeGrammyReactive(mockBot, params).notFrom({
+      userIds: [2],
+    }).withDocuments.$;
+
+    messages$.subscribe({
+      next: (msg) => {
+        expect(msg.documents).toHaveLength(1);
+        done();
+      },
+    });
+
+    mockBot.next(
+      createMockMessageCtx(
+        { message: { from: { id: 1 } } },
+        { mediaType: "document", mediaGroupId: "group1", fileIds: ["file1"] },
+      ),
+    );
+    mockBot.next(
+      createMockMessageCtx(
+        { message: { from: { id: 2 } } },
+        { mediaType: "document", mediaGroupId: "group1", fileIds: ["file2"] },
+      ),
+    );
+  });
+
+  it("should filter reply messages with documents", (done) => {
+    const messages$ = makeGrammyReactive(mockBot, params).thatAreReplies
+      .withDocuments.$;
+
+    messages$.subscribe({
+      next: (msg) => {
+        expect(msg.documents).toHaveLength(1);
+        expect(msg.ctx.message.reply_to_message).toBeDefined();
+        done();
+      },
+    });
+
+    mockBot.next(
+      createMockMessageCtx(
+        { message: { reply_to_message: {}, from: { id: 1 } } },
+        { mediaType: "document", mediaGroupId: "group1", fileIds: ["file1"] },
+      ),
+    );
+    mockBot.next(
+      createMockMessageCtx(
+        { message: { from: { id: 2 } } },
+        { mediaType: "document", mediaGroupId: "group1", fileIds: ["file2"] },
+      ),
+    );
+  });
+
+  it("should filter non-reply messages with documents", (done) => {
+    const messages$ = makeGrammyReactive(mockBot, params).thatAreNotReplies
+      .withDocuments.$;
+
+    messages$.subscribe({
+      next: (msg) => {
+        expect(msg.documents).toHaveLength(1);
+        expect(msg.ctx.message.reply_to_message).toBeUndefined();
+        done();
+      },
+    });
+
+    mockBot.next(
+      createMockMessageCtx(
+        { message: { from: { id: 1 } } },
+        { mediaType: "document", mediaGroupId: "group1", fileIds: ["file1"] },
+      ),
+    );
+    mockBot.next(
+      createMockMessageCtx(
+        { message: { reply_to_message: {}, from: { id: 2 } } },
+        { mediaType: "document", mediaGroupId: "group1", fileIds: ["file2"] },
+      ),
+    );
+  });
+
+  it("should filter messages with photos from user ID 1", (done) => {
+    const messages$ = makeGrammyReactive(mockBot, params).from({ userIds: [1] })
+      .withPhotos.$;
+
+    messages$.subscribe({
+      next: (msg) => {
+        expect(msg.photos).toHaveLength(1);
+        done();
+      },
+    });
+
+    mockBot.next(
+      createMockMessageCtx(
+        { message: { from: { id: 1 } } },
+        { mediaType: "photo", mediaGroupId: "group1", fileIds: ["file1"] },
+      ),
+    );
+    mockBot.next(
+      createMockMessageCtx(
+        { message: { from: { id: 2 } } },
+        { mediaType: "photo", mediaGroupId: "group1", fileIds: ["file2"] },
+      ),
+    );
+  });
+
+  it("should filter messages with photos not from user ID 2", (done) => {
+    const messages$ = makeGrammyReactive(mockBot, params).notFrom({
+      userIds: [2],
+    }).withPhotos.$;
+
+    messages$.subscribe({
+      next: (msg) => {
+        expect(msg.photos).toHaveLength(1);
+        done();
+      },
+    });
+
+    mockBot.next(
+      createMockMessageCtx(
+        { message: { from: { id: 1 } } },
+        { mediaType: "photo", mediaGroupId: "group1", fileIds: ["file1"] },
+      ),
+    );
+    mockBot.next(
+      createMockMessageCtx(
+        { message: { from: { id: 2 } } },
+        { mediaType: "photo", mediaGroupId: "group1", fileIds: ["file2"] },
+      ),
+    );
+  });
+
+  it("should filter reply messages with photos", (done) => {
+    const messages$ = makeGrammyReactive(mockBot, params).thatAreReplies
+      .withPhotos.$;
+
+    messages$.subscribe({
+      next: (msg) => {
+        expect(msg.photos).toHaveLength(1);
+        expect(msg.ctx.message.reply_to_message).toBeDefined();
+        done();
+      },
+    });
+
+    mockBot.next(
+      createMockMessageCtx(
+        { message: { reply_to_message: {}, from: { id: 1 } } },
+        { mediaType: "photo", mediaGroupId: "group1", fileIds: ["file1"] },
+      ),
+    );
+    mockBot.next(
+      createMockMessageCtx(
+        { message: { from: { id: 2 } } },
+        { mediaType: "photo", mediaGroupId: "group1", fileIds: ["file2"] },
+      ),
+    );
+  });
+
+  it("should filter non-reply messages with photos", (done) => {
+    const messages$ = makeGrammyReactive(mockBot, params).thatAreNotReplies
+      .withPhotos.$;
+
+    messages$.subscribe({
+      next: (msg) => {
+        expect(msg.photos).toHaveLength(1);
+        expect(msg.ctx.message.reply_to_message).toBeUndefined();
+        done();
+      },
+    });
+
+    mockBot.next(
+      createMockMessageCtx(
+        { message: { from: { id: 1 } } },
+        { mediaType: "photo", mediaGroupId: "group1", fileIds: ["file1"] },
+      ),
+    );
+    mockBot.next(
+      createMockMessageCtx(
+        { message: { reply_to_message: {}, from: { id: 2 } } },
+        { mediaType: "photo", mediaGroupId: "group1", fileIds: ["file2"] },
+      ),
+    );
+  });
+
+  // 10 combinations of filters after withDocuments
+  it("should filter messages with documents and then from user ID 1", (done) => {
+    const messages$ = makeGrammyReactive(mockBot, params).withDocuments.from({
+      userIds: [1],
+    }).$;
+
+    messages$.subscribe({
+      next: (msg) => {
+        expect(msg.documents).toHaveLength(1);
+        expect(msg.ctx.message.from.id).toBe(1);
+        done();
+      },
+    });
+
+    mockBot.next(
+      createMockMessageCtx(
+        { message: { from: { id: 1 } } },
+        { mediaType: "document", mediaGroupId: "group1", fileIds: ["file1"] },
+      ),
+    );
+    mockBot.next(
+      createMockMessageCtx(
+        { message: { from: { id: 2 } } },
+        { mediaType: "document", mediaGroupId: "group1", fileIds: ["file2"] },
+      ),
+    );
+  });
+
+  it("should filter messages with documents and then not from user ID 2", (done) => {
+    const messages$ = makeGrammyReactive(mockBot, params).withDocuments.notFrom(
+      { userIds: [2] },
+    ).$;
+
+    messages$.subscribe({
+      next: (msg) => {
+        expect(msg.documents).toHaveLength(1);
+        expect(msg.ctx.message.from.id).toBe(1);
+        done();
+      },
+    });
+
+    mockBot.next(
+      createMockMessageCtx(
+        { message: { from: { id: 1 } } },
+        { mediaType: "document", mediaGroupId: "group1", fileIds: ["file1"] },
+      ),
+    );
+    mockBot.next(
+      createMockMessageCtx(
+        { message: { from: { id: 2 } } },
+        { mediaType: "document", mediaGroupId: "group1", fileIds: ["file2"] },
+      ),
+    );
+  });
+
+  it("should filter messages with documents and then that are replies", (done) => {
+    const messages$ = makeGrammyReactive(mockBot, params).withDocuments
+      .thatAreReplies.$;
+
+    messages$.subscribe({
+      next: (msg) => {
+        expect(msg.documents).toHaveLength(1);
+        expect(msg.ctx.message.reply_to_message).toBeDefined();
+        done();
+      },
+    });
+
+    mockBot.next(
+      createMockMessageCtx(
+        { message: { reply_to_message: {}, from: { id: 1 } } },
+        { mediaType: "document", mediaGroupId: "group1", fileIds: ["file1"] },
+      ),
+    );
+    mockBot.next(
+      createMockMessageCtx(
+        { message: { from: { id: 2 } } },
+        { mediaType: "document", mediaGroupId: "group1", fileIds: ["file2"] },
+      ),
+    );
+  });
+
+  it("should filter messages with documents and then that are not replies", (done) => {
+    const messages$ = makeGrammyReactive(mockBot, params).withDocuments
+      .thatAreNotReplies.$;
+
+    messages$.subscribe({
+      next: (msg) => {
+        expect(msg.documents).toHaveLength(1);
+        expect(msg.ctx.message.reply_to_message).toBeUndefined();
+        done();
+      },
+    });
+
+    mockBot.next(
+      createMockMessageCtx(
+        { message: { from: { id: 1 } } },
+        { mediaType: "document", mediaGroupId: "group1", fileIds: ["file1"] },
+      ),
+    );
+    mockBot.next(
+      createMockMessageCtx(
+        { message: { reply_to_message: {}, from: { id: 2 } } },
+        { mediaType: "document", mediaGroupId: "group1", fileIds: ["file2"] },
+      ),
+    );
+  });
+
+  it("should filter messages with photos and then from user ID 1", (done) => {
+    const messages$ = makeGrammyReactive(mockBot, params).withPhotos.from({
+      userIds: [1],
+    }).$;
+
+    messages$.subscribe({
+      next: (msg) => {
+        expect(msg.photos).toHaveLength(1);
+        expect(msg.ctx.message.from.id).toBe(1);
+        done();
+      },
+    });
+
+    mockBot.next(
+      createMockMessageCtx(
+        { message: { from: { id: 1 } } },
+        { mediaType: "photo", mediaGroupId: "group1", fileIds: ["file1"] },
+      ),
+    );
+    mockBot.next(
+      createMockMessageCtx(
+        { message: { from: { id: 2 } } },
+        { mediaType: "photo", mediaGroupId: "group1", fileIds: ["file2"] },
+      ),
+    );
+  });
+
+  it("should filter messages with photos and then not from user ID 2", (done) => {
+    const messages$ = makeGrammyReactive(mockBot, params).withPhotos.notFrom({
+      userIds: [2],
+    }).$;
+
+    messages$.subscribe({
+      next: (msg) => {
+        expect(msg.photos).toHaveLength(1);
+        expect(msg.ctx.message.from.id).toBe(1);
+        done();
+      },
+    });
+
+    mockBot.next(
+      createMockMessageCtx(
+        { message: { from: { id: 1 } } },
+        { mediaType: "photo", mediaGroupId: "group1", fileIds: ["file1"] },
+      ),
+    );
+    mockBot.next(
+      createMockMessageCtx(
+        { message: { from: { id: 2 } } },
+        { mediaType: "photo", mediaGroupId: "group1", fileIds: ["file2"] },
+      ),
+    );
+  });
+
+  it("should filter messages with photos and then that are replies", (done) => {
+    const messages$ = makeGrammyReactive(mockBot, params).withPhotos
+      .thatAreReplies.$;
+
+    messages$.subscribe({
+      next: (msg) => {
+        expect(msg.photos).toHaveLength(1);
+        expect(msg.ctx.message.reply_to_message).toBeDefined();
+        done();
+      },
+    });
+
+    mockBot.next(
+      createMockMessageCtx(
+        { message: { reply_to_message: {}, from: { id: 1 } } },
+        { mediaType: "photo", mediaGroupId: "group1", fileIds: ["file1"] },
+      ),
+    );
+    mockBot.next(
+      createMockMessageCtx(
+        { message: { from: { id: 2 } } },
+        { mediaType: "photo", mediaGroupId: "group1", fileIds: ["file2"] },
+      ),
+    );
+  });
+
+  it("should filter messages with photos and then that are not replies", (done) => {
+    const messages$ = makeGrammyReactive(mockBot, params).withPhotos
+      .thatAreNotReplies.$;
+
+    messages$.subscribe({
+      next: (msg) => {
+        expect(msg.photos).toHaveLength(1);
+        expect(msg.ctx.message.reply_to_message).toBeUndefined();
+        done();
+      },
+    });
+
+    mockBot.next(
+      createMockMessageCtx(
+        { message: { reply_to_message: {}, from: { id: 1 } } },
+        { mediaType: "photo", mediaGroupId: "group1", fileIds: ["file1"] },
+      ),
+    );
+    mockBot.next(
+      createMockMessageCtx(
+        { message: { from: { id: 2 } } },
         { mediaType: "photo", mediaGroupId: "group1", fileIds: ["file2"] },
       ),
     );

@@ -1,5 +1,6 @@
 import { FilterOptions } from "./types/BaseChain";
 import {
+  combineLatest,
   debounceTime,
   filter,
   first,
@@ -7,13 +8,18 @@ import {
   fromEventPattern,
   groupBy,
   GroupedObservable,
+  last,
   map,
+  merge,
   mergeMap,
   Observable,
+  of,
   share,
   startWith,
+  switchMap,
   takeUntil,
   tap,
+  withLatestFrom,
 } from "rxjs";
 import {
   AllChains,
@@ -130,7 +136,6 @@ export const createChain = <
     const sameUserSameChatMessagesWithMedia$$: Observable<
       GroupedObservable<string, T>
     > = selfTyped.$.pipe(
-      tap((val) => console.log(`selfTyped.$ ctx ${JSON.stringify(val)}`)),
       //берем только сообщения с медиа
       filter(({ ctx }) => !!ctx.message.media_group_id),
       groupBy<T, string>(getUserChatKeyByWrappedCtx, {
@@ -143,23 +148,18 @@ export const createChain = <
     const sameMediaGroupMessages$$ = sameUserSameChatMessagesWithMedia$$.pipe(
       mergeMap((sameUserSameChatMessagesWithSameMediaGroup$) =>
         sameUserSameChatMessagesWithSameMediaGroup$.pipe(
-          tap((val) =>
-            console.log(
-              `sameUserSameChatMessagesWithSameMediaGroup$ created with ctx ${JSON.stringify(val)}`,
-            ),
-          ),
-
           //TODO: проверить, что у одиночных документов тоже создается медиа-группа
-          groupBy<T, string>(getMediaGroupIdFromWrapppedCtx, {
-            duration: (sameUserSameChatMessagesSameMediaGroup$) =>
-              //ожидаем поступления сообщений в группу в течение 5 минут
-              sameUserSameChatMessagesSameMediaGroup$.pipe(
-                debounceTime(FIVE_MINUTES),
-                take(1),
-              ),
-          }),
-          tap((val) =>
-            console.log(`sameMediaGroupMessages$$ created with key ${val.key}`),
+          groupBy<T, string>(
+            (wrappedCtx) =>
+              `${getUserChatKeyByWrappedCtx(wrappedCtx)}_${getMediaGroupIdFromWrapppedCtx(wrappedCtx)}`,
+            {
+              duration: (sameUserSameChatMessagesSameMediaGroup$) =>
+                //ожидаем поступления сообщений в группу в течение 5 минут
+                sameUserSameChatMessagesSameMediaGroup$.pipe(
+                  debounceTime(FIVE_MINUTES),
+                  take(1),
+                ),
+            },
           ),
         ),
       ),
@@ -171,68 +171,78 @@ export const createChain = <
           Exclude<AllowedChainsTup[number], "ContentType"> | "Fetch",
           T & DocumentMessagesAggregated
         > {
-          const docMessagesBatches$ = sameMediaGroupMessages$$.pipe(
-            mergeMap((sameMediaGroupMessages$) =>
-              sameMediaGroupMessages$.pipe(
-                first(),
-                tap((val) =>
-                  console.log(
-                    `staring mediagroup with ${JSON.stringify(val.ctx)}`,
+          const docMessagesBatches$ = merge(
+            sameMediaGroupMessages$$.pipe(
+              mergeMap((sameMediaGroupMessages$) =>
+                sameMediaGroupMessages$.pipe(
+                  first(),
+                  filter(
+                    //сообщения в группах документов начинаются либо с сообщения с ctx.message.document, либо с текстовой подписи - простого сообщения
+                    //TODO: абстрагировать фильтр
+                    ({ ctx }) => !!ctx.message.document || !!ctx.message.text,
+                  ),
+                  map((payload) =>
+                    sameMediaGroupMessages$.pipe(startWith(payload)),
                   ),
                 ),
-                filter(
-                  //сообщения в группах документов начинаются либо с сообщения с ctx.message.document, либо с текстовой подписи - простого сообщения
-                  //TODO: проверить это утверждение
-                  //TODO: абстрагировать фильтр
-                  //TODO: проверить будет ли везде reply_message
-                  ({ ctx }) => !!ctx.message.document || !!ctx.message.text,
-                ),
-                map((payload) =>
-                  sameMediaGroupMessages$.pipe(startWith(payload)),
+              ),
+              mergeMap((sameMediaGroupDocumentMessages$) =>
+                sameMediaGroupDocumentMessages$.pipe(
+                  //закрываем стрим пачки документов если не приходили новые документы в течение uxDebounce
+                  takeUntil(
+                    sameMediaGroupDocumentMessages$.pipe(
+                      //TODO: абстрагировать условие
+                      filter(pluckCtx(ctxHasDocument)),
+                      debounceTime(params.uxDebounce),
+                    ),
+                  ),
+                  toArray(),
                 ),
               ),
             ),
-            mergeMap((sameMediaGroupDocumentMessages$) =>
-              sameMediaGroupDocumentMessages$.pipe(
-                //закрываем стрим пачки документов если не приходили новые документы в течение uxDebounce
-                takeUntil(
-                  sameMediaGroupDocumentMessages$.pipe(
-                    //TODO: абстрагировать условие
-                    filter(pluckCtx(ctxHasDocument)),
-                    debounceTime(params.uxDebounce),
-                  ),
-                ),
-                toArray(),
+            //TODO: abstract away
+            selfTyped.$.pipe(
+              filter(
+                ({ ctx }) =>
+                  !ctx.message.media_group_id && !!ctx.message.document,
               ),
+              map((payload) => [payload]),
             ),
           );
 
-          const $: Observable<T & DocumentMessagesAggregated> =
-            docMessagesBatches$.pipe(
-              map(
-                (payloads: T[]) =>
-                  //@ts-expect-error
-                  console.log("payloads", payloads) || {
-                    ...(payloads[0] as T),
-                    //если в первом сообщении нет документа - это текстовая аннотация
-                    textCtx: !payloads[0].ctx.message.document
-                      ? payloads[0].ctx
-                      : null,
-                    documentCtxs: payloads
-                      .filter(pluckCtx(ctxHasDocument))
-                      .map(({ ctx }) => ctx as DocumentMessageCtx),
-                    documents: payloads
-                      .map(({ ctx }) => ctx.message.document)
-                      .filter(isNotUndefined),
-                    //если отправляют один документ, то текст записывается в нем как caption. Иначе, если документов больше - отправляется
-                    //предшествующим текстовым сообщением
-                    text:
-                      payloads[0].ctx.message.text ??
-                      payloads[0].ctx.message.caption ??
-                      "",
-                  },
-              ),
-            );
+          const $: Observable<T & DocumentMessagesAggregated> = combineLatest([
+            //на всякий случай комбайним с последним ТЕКСТОВЫМ сообщением, потому что если отправлялась группа документов
+            //с подписью, подпись будет отправлена текстовым сообщением перед группой И НЕ ВОЙДЕТ В ГРУППУ media_group_id - хз почему так апи телеграмма сделано
+            selfTyped.withTextOnly.$.pipe(startWith(null)),
+            docMessagesBatches$,
+          ]).pipe(
+            map(([textCtx, batch]) =>
+              textCtx === null
+                ? batch
+                : batch.length
+                  ? [textCtx, ...batch]
+                  : batch,
+            ),
+            map((payloads: T[]) => ({
+              ...(payloads[0] as T),
+              //если в первом сообщении нет документа - это текстовая аннотация - мы добавляем ее в начало массива
+              textCtx: !payloads[0].ctx.message.document
+                ? payloads[0].ctx
+                : null,
+              documentCtxs: payloads
+                .filter(pluckCtx(ctxHasDocument))
+                .map(({ ctx }) => ctx as DocumentMessageCtx),
+              documents: payloads
+                .map(({ ctx }) => ctx.message.document)
+                .filter(isNotUndefined),
+              //если отправляют один документ, то текст записывается в нем как caption. Иначе, если документов больше - отправляется
+              //предшествующим текстовым сообщением и мы добавляем его в начало массива
+              text:
+                payloads[0].ctx.message.text ??
+                payloads[0].ctx.message.caption ??
+                "",
+            })),
+          );
 
           return createChain(
             $,
@@ -246,26 +256,34 @@ export const createChain = <
           Exclude<AllowedChainsTup[number], "ContentType"> | "Fetch",
           T & PhotoMessagesAggregated
         > {
-          const photoMessagesBatches$ = sameMediaGroupMessages$$.pipe(
-            mergeMap((sameMediaGroupMessages$) =>
-              sameMediaGroupMessages$.pipe(
-                first(),
-                filter(({ ctx }) => !!ctx.message.photo),
-                map((payload) =>
-                  sameMediaGroupMessages$.pipe(startWith(payload)),
+          const photoMessagesBatches$ = merge(
+            sameMediaGroupMessages$$.pipe(
+              mergeMap((sameMediaGroupMessages$) =>
+                sameMediaGroupMessages$.pipe(
+                  first(),
+                  filter(({ ctx }) => !!ctx.message.photo),
+                  map((payload) =>
+                    sameMediaGroupMessages$.pipe(startWith(payload)),
+                  ),
+                ),
+              ),
+              mergeMap((sameMediaGroupPhotoMessages$) =>
+                sameMediaGroupPhotoMessages$.pipe(
+                  //закрываем стрим пачки фоток если не приходили новые документы в течение uxDebounce
+                  takeUntil(
+                    sameMediaGroupPhotoMessages$.pipe(
+                      debounceTime(params.uxDebounce),
+                    ),
+                  ),
+                  toArray(),
                 ),
               ),
             ),
-            mergeMap((sameMediaGroupPhotoMessages$) =>
-              sameMediaGroupPhotoMessages$.pipe(
-                //закрываем стрим пачки фоток если не приходили новые документы в течение uxDebounce
-                takeUntil(
-                  sameMediaGroupPhotoMessages$.pipe(
-                    debounceTime(params.uxDebounce),
-                  ),
-                ),
-                toArray(),
+            selfTyped.$.pipe(
+              filter(
+                ({ ctx }) => !ctx.message.media_group_id && !!ctx.message.photo,
               ),
+              map((payload) => [payload]),
             ),
           );
 
@@ -306,7 +324,6 @@ export const createChain = <
             //берем только сообщения с медиа
             filter<T>(pluckCtx(ctxHasTextOnly)),
           );
-          console.log("=>(createChain.ts:286) $", $);
 
           return createChain(
             $,

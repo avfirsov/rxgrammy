@@ -44,15 +44,14 @@ export function pluckCtx<T extends Context, R extends T>(
 
 export const ctxHasPhoto = (ctx: BaseMessageCtx): boolean =>
   !!ctx.message.photo;
-export const ctxHasDocument = (
-  ctx: BaseMessageCtx,
-): boolean => !!ctx.message.document;
+export const ctxHasDocument = (ctx: BaseMessageCtx): boolean =>
+  !!ctx.message.document;
 export const ctxHasTextOnly = (ctx: BaseMessageCtx): boolean =>
   !ctxHasPhoto(ctx) && !ctxHasDocument(ctx);
 export const isReplyMessage = (ctx: BaseMessageCtx): boolean =>
   !!ctx.message.reply_to_message;
 export const getUserChatKeyByWrappedCtx = ({ ctx }: BaseWrappedCtx): string =>
-  `${ctx.chat.id}-${ctx.message.message_id}`;
+  `${ctx.chat.id}-${ctx.message.from.id}`;
 export const getMediaGroupIdFromWrapppedCtx = ({
   ctx,
 }: BaseWrappedCtx): string => ctx.message.media_group_id!;
