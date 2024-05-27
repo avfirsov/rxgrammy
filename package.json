@@ -4,6 +4,7 @@
   "description": "RxJS wrapper aroung Grammy",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "type": "module",
   "scripts": {
     "test": "jest",
     "clean": "powershell -Command \"Get-ChildItem -Path ./src -Recurse -Include *.js -Exclude node_modules | ForEach-Object {Write-Host $_.FullName; Remove-Item $_}\"",
