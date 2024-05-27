@@ -1,6 +1,5 @@
 import { FilterOptions } from "./types/BaseChain.js";
 import {
-  combineLatest,
   debounceTime,
   filter,
   first,
@@ -15,6 +14,7 @@ import {
   share,
   startWith,
   takeUntil,
+  withLatestFrom,
 } from "rxjs";
 import {
   AllChains,
@@ -210,39 +210,40 @@ export const createChain = <
             ),
           );
 
-          const $: Observable<T & DocumentMessagesAggregated> = combineLatest([
-            //на всякий случай комбайним с последним ТЕКСТОВЫМ сообщением, потому что если отправлялась группа документов
-            //с подписью, подпись будет отправлена текстовым сообщением перед группой И НЕ ВОЙДЕТ В ГРУППУ media_group_id - хз почему так апи телеграмма сделано
-            selfTyped.withTextOnly.$.pipe(startWith(null)),
-            docMessagesBatches$,
-          ]).pipe(
-            map(([textCtx, batch]) =>
-              textCtx === null
-                ? batch
-                : batch.length
-                  ? [textCtx, ...batch]
-                  : batch,
-            ),
-            map((payloads: T[]) => ({
-              ...(payloads[0] as T),
-              //если в первом сообщении нет документа - это текстовая аннотация - мы добавляем ее в начало массива
-              textCtx: !payloads[0].ctx.message.document
-                ? payloads[0].ctx
-                : null,
-              documentCtxs: payloads
-                .filter(pluckCtx(ctxHasDocument))
-                .map(({ ctx }) => ctx as DocumentMessageCtx),
-              documents: payloads
-                .map(({ ctx }) => ctx.message.document)
-                .filter(isNotUndefined),
-              //если отправляют один документ, то текст записывается в нем как caption. Иначе, если документов больше - отправляется
-              //предшествующим текстовым сообщением и мы добавляем его в начало массива
-              text:
-                payloads[0].ctx.message.text ??
-                payloads[0].ctx.message.caption ??
-                "",
-            })),
-          );
+          const $: Observable<T & DocumentMessagesAggregated> =
+            docMessagesBatches$.pipe(
+              withLatestFrom(
+                //на всякий случай комбайним с последним ТЕКСТОВЫМ сообщением, потому что если отправлялась группа документов
+                //с подписью, подпись будет отправлена текстовым сообщением перед группой И НЕ ВОЙДЕТ В ГРУППУ media_group_id - хз почему так апи телеграмма сделано
+                selfTyped.withTextOnly.$.pipe(startWith(null)),
+              ),
+              map(([batch, textCtx]) =>
+                textCtx === null
+                  ? batch
+                  : batch.length
+                    ? [textCtx, ...batch]
+                    : batch,
+              ),
+              map((payloads: T[]) => ({
+                ...(payloads[0] as T),
+                //если в первом сообщении нет документа - это текстовая аннотация - мы добавляем ее в начало массива
+                textCtx: !payloads[0].ctx.message.document
+                  ? payloads[0].ctx
+                  : null,
+                documentCtxs: payloads
+                  .filter(pluckCtx(ctxHasDocument))
+                  .map(({ ctx }) => ctx as DocumentMessageCtx),
+                documents: payloads
+                  .map(({ ctx }) => ctx.message.document)
+                  .filter(isNotUndefined),
+                //если отправляют один документ, то текст записывается в нем как caption. Иначе, если документов больше - отправляется
+                //предшествующим текстовым сообщением и мы добавляем его в начало массива
+                text:
+                  payloads[0].ctx.message.text ??
+                  payloads[0].ctx.message.caption ??
+                  "",
+              })),
+            );
 
           return createChain(
             $,
