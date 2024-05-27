@@ -1,9 +1,2 @@
-import { makeGrammyReactive } from "./createChain";
-
-export * from "./types";
-
-export {
-  makeGrammyReactive,
-  type Params,
-  createChain,
-} from "./createChain";
+export * from "./types/index.js";
+export { makeGrammyReactive, type Params, createChain } from "./createChain.js";
