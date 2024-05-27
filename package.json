@@ -17,7 +17,8 @@
     "test": "jest --config jest.config.js",
     "clean": "powershell -Command \"Get-ChildItem -Path ./src -Recurse -Include *.js -Exclude node_modules | ForEach-Object {Write-Host $_.FullName; Remove-Item $_}\"",
     "build": "tsc --build",
-    "clean-build": "npm run clean && npm run build"
+    "clean-build": "npm run clean && npm run build",
+    "publish": "npm publish"
   },
   "keywords": [],
   "author": "",
