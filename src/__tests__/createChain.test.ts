@@ -1,15 +1,29 @@
+import { jest } from "@jest/globals";
 import { Api, Bot, Context, RawApi } from "grammy";
-import { makeGrammyReactive, Params } from "../createChain";
-import { BaseMessageCtx } from "../types";
+import { makeGrammyReactive, Params } from "../createChain.js";
+import {
+  BaseMessageCtx,
+  DocumentMessageCtx,
+  FetchedFile,
+  PhotoMessageCtx,
+} from "../types";
 import { PartialDeep } from "type-fest";
-import { FetchedFile } from "../types/FetchChain";
+import { Response } from "node-fetch";
+
+import fetch from "node-fetch";
+jest.mock("node-fetch", () => jest.fn());
 
 // Mock the fetchFileFromCtx function
 jest.mock("../utils/tg", () => ({
-  ...jest.requireActual("../utils/tg"),
+  ...jest.requireActual<object>("../utils/tg"),
   fetchFileFromCtx: jest
-    .fn()
-    .mockResolvedValue({ data: "file-data", fileInfo: { file_id: "file-id" } }),
+    .fn<
+      (ctx: DocumentMessageCtx | PhotoMessageCtx) => Promise<FetchedFile | void>
+    >()
+    .mockResolvedValue({
+      data: "file-data" as unknown as Response,
+      fileInfo: { file_id: "file-id", file_unique_id: "42" },
+    }),
 }));
 
 const createMockBot = (): Bot<Context, Api<RawApi>> & {
@@ -352,12 +366,12 @@ describe("createChain", () => {
     const expectedMessages = [
       {
         ctx: createMockMessageCtx({
-          message: { from: { id: 1 }, chat: { id: 1 }, text: "Caption" },
+          message: { from: { id: 1 }, chat: { id: 1 }, caption: "Caption" },
         }),
       },
       {
         ctx: createMockMessageCtx({
-          message: { from: { id: 2 }, chat: { id: 2 }, text: "Caption2" },
+          message: { from: { id: 2 }, chat: { id: 2 }, caption: "Caption2" },
         }),
       },
     ];
@@ -371,8 +385,8 @@ describe("createChain", () => {
         expect(msg.ctx.message.chat.id).toBe(
           expectedMessages[count].ctx.message.chat.id,
         );
-        expect(msg.ctx.message.text).toBe(
-          expectedMessages[count].ctx.message.text,
+        expect(msg.ctx.message.caption).toBe(
+          expectedMessages[count].ctx.message.caption,
         );
         count++;
         if (count === expectedMessages.length) {
@@ -382,19 +396,42 @@ describe("createChain", () => {
     });
 
     mockBot.next(
+      createMockMessageCtx({
+        message: {
+          text: "Not caption!",
+        },
+      }),
+    );
+
+    mockBot.next(
+      createMockMessageCtx({
+        message: {
+          text: "Not caption 2!",
+        },
+      }),
+    );
+
+    mockBot.next(
       createMockMessageCtx(
-        {},
+        {
+          message: {
+            caption: "Caption",
+          },
+        },
         {
           mediaType: "document",
           fileIds: ["file1"],
-          text: "Caption",
         },
       ),
     );
 
     mockBot.next(
       createMockMessageCtx(
-        {},
+        {
+          message: {
+            caption: "Caption2",
+          },
+        },
         {
           userId: 2,
           chatId: 2,

@@ -220,7 +220,7 @@ export const createChain = <
               map(([batch, textCtx]) =>
                 textCtx === null
                   ? batch
-                  : batch.length
+                  : batch.length > 1
                     ? [textCtx, ...batch]
                     : batch,
               ),
@@ -239,8 +239,14 @@ export const createChain = <
                 //если отправляют один документ, то текст записывается в нем как caption. Иначе, если документов больше - отправляется
                 //предшествующим текстовым сообщением и мы добавляем его в начало массива
                 text:
+                  payloads
+                    .map(
+                      (payload) =>
+                        payload.ctx.message.document &&
+                        payload.ctx.message.caption,
+                    )
+                    .filter(isNotUndefined)[0] ??
                   payloads[0].ctx.message.text ??
-                  payloads[0].ctx.message.caption ??
                   "",
               })),
             );
