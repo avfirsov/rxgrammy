@@ -5,8 +5,15 @@ import {
 } from "./ContentTypeChain";
 import { File } from "@grammyjs/types";
 import { Response } from "node-fetch";
+import { Document } from "@grammyjs/types/message";
+import { PhotoSize } from "grammy/out/types";
 
-export type FetchedFile = { data: Response; fileInfo: File };
+export type FetchedFile = {
+  data: Response;
+  fileInfo: File;
+  document?: Document;
+  photo?: PhotoSize;
+};
 export type FetchError = { error: Error };
 export type WithFetched = {
   fetched: (FetchedFile | FetchError)[];

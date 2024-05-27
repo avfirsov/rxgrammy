@@ -2,9 +2,7 @@ import { Api, Bot, Context, RawApi } from "grammy";
 import { makeGrammyReactive, Params } from "../createChain";
 import { BaseMessageCtx } from "../types";
 import { PartialDeep } from "type-fest";
-import { PhotoSize, Update } from "grammy/out/types";
 import { FetchedFile } from "../types/FetchChain";
-import objectContaining = jasmine.objectContaining;
 
 // Mock the fetchFileFromCtx function
 jest.mock("../utils/tg", () => ({

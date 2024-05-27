@@ -77,6 +77,8 @@ export const fetchFileFromCtx = async (
     return {
       data,
       fileInfo,
+      document: ctx.message.document,
+      photo: ctx.message.photo?.[ctx.message.photo?.length - 1],
     };
   } catch (error) {
     console.error("Ошибка при получении файла:", error);
