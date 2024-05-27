@@ -1,19 +1,28 @@
 {
   "compilerOptions": {
-    "module": "commonjs",
-    "target": "es6",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "outDir": "./dist",
     "noImplicitAny": true,
     "allowSyntheticDefaultImports": true,
-    "declaration": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "target": "es2016" /* Set the JavaScript language version for emitted JavaScript and include compatible library declarations. */,
+    "lib": [
+      "es5",
+      "es6"
+    ] /* Specify a set of bundled library declaration files that describe the target runtime environment. */,
+    "module": "esnext" /* Specify what module code is generated. */,
+    "rootDir": "./src" /* Specify the root folder within your source files. */,
+    "moduleResolution": "node" /* Specify how TypeScript looks up a file from a given module specifier. */,
+    "baseUrl": "./" /* Specify the base directory to resolve non-relative module names. */,
+    "declaration": true /* Generate .d.ts files from TypeScript and JavaScript files in your project. */,
+    "sourceMap": true /* Create source map files for emitted JavaScript files. */,
+    "removeComments": false /* Disable emitting comments. */
   },
   "ts-node": {
     "esm": true
   },
-  "include": ["src/**/*", "node_modules/grammy"],
+  "include": ["src/**/*", "node_modules/grammy", "src/index.ts"],
   "exclude": ["node_modules"]
 }
