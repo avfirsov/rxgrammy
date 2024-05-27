@@ -1,4 +1,4 @@
-import { Context, Filter } from "grammy";
+import { Context } from "grammy";
 import { BaseWrappedCtx } from "../types";
 import { FetchedFile } from "../types/FetchChain";
 import {
@@ -6,6 +6,7 @@ import {
   DocumentMessageCtx,
   PhotoMessageCtx,
 } from "../types/tg";
+import fetch from "node-fetch";
 
 type WithoutArgReturnType<T extends Context> = {
   (wrapped: { ctx: T }): T;
@@ -62,8 +63,6 @@ export const fetchFileFromCtx = async (
   // Получаем объект файла
   const file =
     ctx.message?.document || ctx.message?.photo?.[ctx.message.photo.length - 1];
-  console.log("=>(tg.ts:37) file", file);
-  console.log("=>(tg.ts:38) file.file_id", file?.file_id);
 
   if (!file || !file.file_id) {
     throw new Error("Файл не найден");
@@ -74,7 +73,6 @@ export const fetchFileFromCtx = async (
     const fileInfo = await ctx.api.getFile(file.file_id);
     const fileUrl = getFileUrl(fileInfo.file_path || "");
     const data = await fetch(fileUrl);
-    console.log("=>(tg.ts:193) data", data);
 
     return {
       data,

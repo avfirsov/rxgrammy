@@ -4,6 +4,7 @@ import {
   PhotoMessagesAggregated,
 } from "./ContentTypeChain";
 import { File } from "@grammyjs/types";
+import { Response } from "node-fetch";
 
 export type FetchedFile = { data: Response; fileInfo: File };
 export type FetchError = { error: Error };

@@ -5,7 +5,7 @@ import {
   DocumentMessagesAggregated,
   PhotoMessagesAggregated,
 } from "./ContentTypeChain";
-import { FetchChain } from "./FetchChain";
+import { FetchChain, FetchError, FetchedFile } from "./FetchChain";
 import { BaseMessageCtx, PhotoMessageCtx, DocumentMessageCtx } from "./tg";
 
 export {
@@ -17,6 +17,8 @@ export {
   BaseMessageCtx,
   PhotoMessageCtx,
   DocumentMessageCtx,
+  FetchError,
+  FetchedFile,
 };
 
 export type AllChains = "Replies" | "ContentType" | "Fetch";
