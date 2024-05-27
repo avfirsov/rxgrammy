@@ -1,12 +1,12 @@
-import { BaseChain } from "./BaseChain";
-import { RepliesChain } from "./RepliesChain";
+import { BaseChain } from "./BaseChain.js";
+import { RepliesChain } from "./RepliesChain.js";
 import {
   ContentTypeChain,
   DocumentMessagesAggregated,
   PhotoMessagesAggregated,
-} from "./ContentTypeChain";
-import { FetchChain, FetchError, FetchedFile } from "./FetchChain";
-import { BaseMessageCtx, PhotoMessageCtx, DocumentMessageCtx } from "./tg";
+} from "./ContentTypeChain.js";
+import { FetchChain, FetchError, FetchedFile } from "./FetchChain.js";
+import { BaseMessageCtx, PhotoMessageCtx, DocumentMessageCtx } from "./tg.js";
 
 export {
   BaseChain,

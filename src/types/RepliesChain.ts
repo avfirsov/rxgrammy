@@ -1,4 +1,4 @@
-import { AllChains, BaseWrappedCtx, WrappedStream } from "./index";
+import { AllChains, BaseWrappedCtx, WrappedStream } from "./index.js";
 
 export type RepliesChain<
   AllowedChains extends AllChains,

@@ -1,8 +1,7 @@
-import { AllChains, BaseWrappedCtx, WrappedStream } from "./index";
-import { BaseMessageCtx, DocumentMessageCtx, PhotoMessageCtx } from "./tg";
+import { AllChains, BaseWrappedCtx, WrappedStream } from "./index.js";
+import { BaseMessageCtx, DocumentMessageCtx, PhotoMessageCtx } from "./tg.js";
 import { PhotoSize } from "grammy/out/types";
 import { Document } from "@grammyjs/types/message";
-import { FetchChain } from "./FetchChain";
 
 export type PhotoMessagesAggregated = {
   photosCtxs: PhotoMessageCtx[];

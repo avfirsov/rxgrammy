@@ -1,5 +1,5 @@
 import { Observable } from "rxjs";
-import { AllChains, BaseWrappedCtx, WrappedStream } from "./index";
+import { AllChains, BaseWrappedCtx, WrappedStream } from "./index.js";
 
 export type FilterOptions =
   | {

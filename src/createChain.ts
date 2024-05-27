@@ -1,4 +1,4 @@
-import { FilterOptions } from "./types/BaseChain";
+import { FilterOptions } from "./types/BaseChain.js";
 import {
   combineLatest,
   debounceTime,
@@ -8,18 +8,13 @@ import {
   fromEventPattern,
   groupBy,
   GroupedObservable,
-  last,
   map,
   merge,
   mergeMap,
   Observable,
-  of,
   share,
   startWith,
-  switchMap,
   takeUntil,
-  tap,
-  withLatestFrom,
 } from "rxjs";
 import {
   AllChains,
@@ -31,7 +26,12 @@ import {
   PhotoMessagesAggregated,
   WrappedStream,
 } from "./types";
-import { dropChain, FIVE_MINUTES, isNotUndefined, not } from "./utils/common";
+import {
+  dropChain,
+  FIVE_MINUTES,
+  isNotUndefined,
+  not,
+} from "./utils/common.js";
 import { Api, Bot, Context, RawApi } from "grammy";
 import {
   ctxHasDocument,
@@ -42,9 +42,9 @@ import {
   getUserChatKeyByWrappedCtx,
   isReplyMessage,
   pluckCtx,
-} from "./utils/tg";
+} from "./utils/tg.js";
 import { take, toArray } from "rxjs/operators";
-import { WithFetched } from "./types/FetchChain";
+import { WithFetched } from "./types/FetchChain.js";
 
 export const createChain = <
   T extends BaseWrappedCtx,

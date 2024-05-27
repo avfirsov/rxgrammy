@@ -1,8 +1,8 @@
-import { AllChains, BaseWrappedCtx, WrappedStream } from "./index";
+import { AllChains, BaseWrappedCtx, WrappedStream } from "./index.js";
 import {
   DocumentMessagesAggregated,
   PhotoMessagesAggregated,
-} from "./ContentTypeChain";
+} from "./ContentTypeChain.js";
 import { File } from "@grammyjs/types";
 import { Response } from "node-fetch";
 import { Document } from "@grammyjs/types/message";

@@ -1,11 +1,11 @@
 import { Context } from "grammy";
-import { BaseWrappedCtx } from "../types";
-import { FetchedFile } from "../types/FetchChain";
 import {
   BaseMessageCtx,
+  BaseWrappedCtx,
   DocumentMessageCtx,
   PhotoMessageCtx,
-} from "../types/tg";
+  FetchedFile,
+} from "../types";
 import fetch from "node-fetch";
 
 type WithoutArgReturnType<T extends Context> = {
