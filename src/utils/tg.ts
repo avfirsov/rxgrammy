@@ -74,12 +74,16 @@ export const fetchFileFromCtx = async (
     const fileUrl = getFileUrl(fileInfo.file_path || "");
     const data = await fetch(fileUrl);
 
-    return {
-      data,
+    const base = {
+      data: await data.buffer(),
       fileInfo,
-      document: ctx.message.document,
-      photo: ctx.message.photo?.[ctx.message.photo?.length - 1],
     };
+
+    return ctx.message.document
+      ? { ...base, document: ctx.message.document }
+      : ctx.message.photo
+        ? { ...base, photo: ctx.message.photo?.[ctx.message.photo?.length - 1] }
+        : undefined;
   } catch (error) {
     console.error("Ошибка при получении файла:", error);
     await ctx.reply("Не удалось получить файл.");

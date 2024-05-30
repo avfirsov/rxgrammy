@@ -8,12 +8,17 @@ import { Response } from "node-fetch";
 import { Document } from "@grammyjs/types/message";
 import { PhotoSize } from "grammy/out/types";
 
-export type FetchedFile = {
-  data: Response;
-  fileInfo: File;
-  document?: Document;
-  photo?: PhotoSize;
-};
+export type FetchedFile =
+  | {
+      data: Buffer;
+      fileInfo: File;
+      document: Document;
+    }
+  | {
+      data: Buffer;
+      fileInfo: File;
+      photo: PhotoSize;
+    };
 export type FetchError = { error: Error };
 export type WithFetched = {
   fetched: (FetchedFile | FetchError)[];

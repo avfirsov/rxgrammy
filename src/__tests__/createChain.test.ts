@@ -11,6 +11,7 @@ import { PartialDeep } from "type-fest";
 import { Response } from "node-fetch";
 
 import fetch from "node-fetch";
+import { Document } from "@grammyjs/types/message";
 jest.mock("node-fetch", () => jest.fn());
 
 // Mock the fetchFileFromCtx function
@@ -21,8 +22,9 @@ jest.mock("../utils/tg", () => ({
       (ctx: DocumentMessageCtx | PhotoMessageCtx) => Promise<FetchedFile | void>
     >()
     .mockResolvedValue({
-      data: "file-data" as unknown as Response,
+      data: "file-data" as unknown as Buffer,
       fileInfo: { file_id: "file-id", file_unique_id: "42" },
+      document: "document" as unknown as Document,
     }),
 }));
 
