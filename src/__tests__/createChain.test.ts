@@ -25,6 +25,7 @@ jest.mock("../utils/tg", () => ({
       data: "file-data" as unknown as Buffer,
       fileInfo: { file_id: "file-id", file_unique_id: "42" },
       document: "document" as unknown as Document,
+      mime: "foo",
     }),
 }));
 

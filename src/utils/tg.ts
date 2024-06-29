@@ -3,10 +3,11 @@ import {
   BaseMessageCtx,
   BaseWrappedCtx,
   DocumentMessageCtx,
-  PhotoMessageCtx,
   FetchedFile,
+  PhotoMessageCtx,
 } from "../types";
 import fetch from "node-fetch";
+import mime from "mime-types";
 
 type WithoutArgReturnType<T extends Context> = {
   (wrapped: { ctx: T }): T;
@@ -57,37 +58,62 @@ export const getMediaGroupIdFromWrapppedCtx = ({
   ctx,
 }: BaseWrappedCtx): string => ctx.message.media_group_id!;
 
+export const getMimeType = (filePath: string) => mime.lookup(filePath);
+
 export const fetchFileFromCtx = async (
   ctx: DocumentMessageCtx | PhotoMessageCtx,
-): Promise<FetchedFile | void> => {
+): Promise<FetchedFile> => {
   // Получаем объект файла
   const file =
     ctx.message?.document || ctx.message?.photo?.[ctx.message.photo.length - 1];
 
   if (!file || !file.file_id) {
-    throw new Error("Файл не найден");
+    throw new Error("Context has no files");
   }
 
-  try {
-    // Получаем путь к файлу через Telegram API
-    const fileInfo = await ctx.api.getFile(file.file_id);
-    const fileUrl = getFileUrl(fileInfo.file_path || "");
-    const data = await fetch(fileUrl);
+  // Получаем путь к файлу через Telegram API
+  const fileInfo = await ctx.api.getFile(file.file_id);
+  if (!fileInfo) {
+    throw new Error(
+      `Could not get file with file_id ${file.file_id} from Telegram server`,
+    );
+  }
 
-    const base = {
-      data: await data.buffer(),
-      fileInfo,
+  const fileUrl = getFileUrl(fileInfo.file_path || "");
+  const data = await fetch(fileUrl);
+  if (!data) {
+    throw new Error(`Could not fetch file from url ${fileUrl}`);
+  }
+
+  const mime = getMimeType(fileInfo.file_path!);
+  if (!mime) {
+    throw new Error(
+      `Could not determine mime type from file_path ${fileInfo.file_path}`,
+    );
+  }
+
+  const base = {
+    data: await data.buffer(),
+    fileInfo,
+    mime,
+  };
+
+  const document = ctx.message.document;
+
+  if (document) {
+    return { ...base, document };
+  }
+
+  const photo = ctx.message.photo;
+
+  if (photo) {
+    return {
+      ...base,
+      photo: photo?.[photo?.length - 1],
     };
-
-    return ctx.message.document
-      ? { ...base, document: ctx.message.document }
-      : ctx.message.photo
-        ? { ...base, photo: ctx.message.photo?.[ctx.message.photo?.length - 1] }
-        : undefined;
-  } catch (error) {
-    console.error("Ошибка при получении файла:", error);
-    await ctx.reply("Не удалось получить файл.");
   }
+
+  throw new Error("Ошибка! Нет ни фото, ни документа");
 };
 
 export const getFileUrl = (file_path: string): string =>

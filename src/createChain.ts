@@ -22,6 +22,8 @@ import {
   BaseWrappedCtx,
   DocumentMessageCtx,
   DocumentMessagesAggregated,
+  FetchedFile,
+  FetchError,
   PhotoMessageCtx,
   PhotoMessagesAggregated,
   WrappedStream,
@@ -345,7 +347,7 @@ export const createChain = <
   if (allowedChains.includes("Fetch")) {
     const selfTyped = self as unknown as WrappedStream<
       "Fetch",
-      BaseWrappedCtx & (DocumentMessagesAggregated | PhotoMessagesAggregated)
+      T & (DocumentMessagesAggregated | PhotoMessagesAggregated)
     >;
 
     Object.defineProperties(self, {
@@ -367,8 +369,8 @@ export const createChain = <
                 toFetch.map(fetchFileFromCtx),
               );
 
-              const fetched = fetchedWrapped
-                .map((wrapped) => {
+              const fetched = fetchedWrapped.map(
+                (wrapped): FetchedFile | FetchError => {
                   if ("value" in wrapped) {
                     return wrapped.value;
                   }
@@ -376,16 +378,24 @@ export const createChain = <
                   if ("reason" in wrapped) {
                     return { error: wrapped.reason };
                   }
-                })
-                .filter(isNotUndefined);
+
+                  throw new Error("Unknown error");
+                },
+              );
 
               return {
                 ...payload,
                 fetched,
-              };
+                onlyFetched: fetched.filter(
+                  (fileDataOrError) => "data" in fileDataOrError,
+                ),
+                onlyErrors: fetched.filter(
+                  (fileDataOrError) => "error" in fileDataOrError,
+                ),
+              } as T & WithFetched;
             }),
             mergeMap((promise) => from(promise)),
-          ) as unknown as Observable<T & WithFetched>;
+          );
 
           return createChain($, dropChain(allowedChains, "Fetch"), params);
         },
