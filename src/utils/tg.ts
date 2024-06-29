@@ -8,6 +8,7 @@ import {
 } from "../types";
 import fetch from "node-fetch";
 import mime from "mime-types";
+import * as path from "path";
 
 type WithoutArgReturnType<T extends Context> = {
   (wrapped: { ctx: T }): T;
@@ -63,6 +64,13 @@ export const getMimeType = (filePath: string) => mime.lookup(filePath);
 export const fetchFileFromCtx = async (
   ctx: DocumentMessageCtx | PhotoMessageCtx,
 ): Promise<FetchedFile> => {
+  const document = ctx.message.document;
+  const photo = ctx.message.photo;
+
+  if (!document && !photo) {
+    throw new Error("Context has no files");
+  }
+
   // Получаем объект файла
   const file =
     ctx.message?.document || ctx.message?.photo?.[ctx.message.photo.length - 1];
@@ -73,7 +81,7 @@ export const fetchFileFromCtx = async (
 
   // Получаем путь к файлу через Telegram API
   const fileInfo = await ctx.api.getFile(file.file_id);
-  if (!fileInfo) {
+  if (!fileInfo || !fileInfo.file_path) {
     throw new Error(
       `Could not get file with file_id ${file.file_id} from Telegram server`,
     );
@@ -96,15 +104,12 @@ export const fetchFileFromCtx = async (
     data: await data.buffer(),
     fileInfo,
     mime,
+    fileName: path.basename(fileInfo.file_path),
   };
-
-  const document = ctx.message.document;
 
   if (document) {
     return { ...base, document };
   }
-
-  const photo = ctx.message.photo;
 
   if (photo) {
     return {
@@ -113,7 +118,7 @@ export const fetchFileFromCtx = async (
     };
   }
 
-  throw new Error("Ошибка! Нет ни фото, ни документа");
+  throw new Error("Should not be encountered");
 };
 
 export const getFileUrl = (file_path: string): string =>

@@ -1,6 +1,6 @@
 {
   "name": "rxgrammy",
-  "version": "1.1.9",
+  "version": "1.1.10",
   "description": "RxJS wrapper aroung Grammy",
   "publishConfig": {
     "access": "public"

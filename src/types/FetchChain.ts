@@ -11,6 +11,7 @@ export type FetchedFile = {
   data: Buffer;
   fileInfo: File;
   mime: string;
+  fileName: string;
 } & (
   | {
       document: Document;
