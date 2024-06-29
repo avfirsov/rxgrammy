@@ -26,6 +26,7 @@ jest.mock("../utils/tg", () => ({
       fileInfo: { file_id: "file-id", file_unique_id: "42" },
       document: "document" as unknown as Document,
       mime: "foo",
+      fileName: "foo",
     }),
 }));
 
