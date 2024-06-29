@@ -6,20 +6,20 @@ import {
 import { File } from "@grammyjs/types";
 import { Document } from "@grammyjs/types/message";
 import { PhotoSize } from "grammy/out/types";
-
-export type FetchedFile = {
+export type FetchedFileBase = {
   data: Buffer;
   fileInfo: File;
   mime: string;
   fileName: string;
-} & (
-  | {
+};
+export type FetchedFile =
+  | (FetchedFileBase & {
       document: Document;
-    }
-  | {
+    })
+  | (FetchedFileBase & {
       photo: PhotoSize;
-    }
-);
+    });
+
 export type FetchError = { error: Error };
 export type WithFetched = {
   fetched: (FetchedFile | FetchError)[];
